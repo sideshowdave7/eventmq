@@ -21,6 +21,8 @@ import logging
 
 from past.builtins import basestring
 
+import zmq
+
 from .. import conf
 from ..utils.functions import name_from_callable, split_callable_name
 from ..utils.messages import send_emqp_message
@@ -145,6 +147,10 @@ def defer_job(
         queue (str): Name of queue to use when executing the job. If this value
             evaluates to False, the default is used. Default: is configured
             default queue name
+        pre_hook (callable or str): the callable (or string path to callable)
+            to be run before func on the worker
+        post_hook (callable or str): the callable (or string path to callable)
+            to be run after func on the worker
     Raises:
         TypeError: When one or more parameters are not JSON serializable.
     Returns:
@@ -306,6 +312,30 @@ def send_schedule_request(socket, message, interval_secs=-1, headers=(),
                                cron))
 
     return msgid
+
+
+def await_reply(socket, timeout=None):
+    """
+    Returns a reply from a socket on which a request was made with
+    the reply-requested header with an optional timeout
+
+    Args:
+        socket (socket)
+        timeout (int): timeout in milliseconds, waits forever if None
+
+    """
+    resp = None
+
+    poller = zmq.Poller()
+    poller.register(socket.zsocket, flags=zmq.POLLIN)
+
+    events = dict(poller.poll(timeout=timeout))
+
+    if events[socket.zsocket] == zmq.POLLIN:
+        msg = socket.recv_multipart()
+        resp = msg
+
+    return resp
 
 
 def send_publish_request(socket, topic, message):

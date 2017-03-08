@@ -98,6 +98,28 @@ class Job(object):
                 return f(*args, **kwargs)
         f.delay = delay
 
+        def delay_blocking(timeout=None, *args, **kwargs):
+            """
+            Same as delay, but waits for a response, the reply-requested header
+            is necessary
+            """
+            if self.async and self.broker_addr:
+                socket = Sender()
+                socket.connect(addr=self.broker_addr)
+
+                messages.defer_job(
+                    socket, f, args=args, kwargs=kwargs, queue=self.queue,
+                    reply_requested=True)
+
+                return messages.await_reply(socket)
+
+            else:
+                if self.async and not self.broker_addr:
+                    logger.warning('No EMQ_BROKER_ADDR defined. Running '
+                                   'function `{}` synchronously'.format(
+                                       f.__name__))
+                return f(*args, **kwargs)
+
         return f
 
 
